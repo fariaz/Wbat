@@ -1,0 +1,86 @@
+version: "3.8"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WBAT Production Stack  —  Deploy via Portainer Stacks
+#
+# Required environment variables (set in Portainer Stack > Env tab):
+#
+#   JWT_SECRET            Strong random secret: openssl rand -hex 32
+#   DB_ROOT_PASS          MariaDB root password
+#   DB_PASS               MariaDB wbat user password
+#   ATTACHMENTS_HOST_PATH Absolute path on Docker host (e.g. /opt/wbat/attachments)
+#   REGISTRY              Your registry prefix if pushing images (e.g. myregistry.io/wbat)
+#                         Leave empty to build locally.
+#
+# The web service does NOT expose a port directly.
+# Use Nginx Proxy Manager to route:
+#   https://wbat.yourdomain.tld -> http://web:80  (Docker network: wbat_net)
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  db:
+    image: mariadb:11
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      MYSQL_DATABASE: wbat
+      MYSQL_USER: wbat
+      MYSQL_PASSWORD: ${DB_PASS}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    networks:
+      - wbat_internal
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: wbat
+      DB_PASS: ${DB_PASS}
+      DB_NAME: wbat
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES: 7d
+      ATTACHMENTS_PATH: /attachments
+      CORS_ORIGIN: "*"
+      PORT: 3000
+    volumes:
+      - ${ATTACHMENTS_HOST_PATH}:/attachments
+    networks:
+      - wbat_internal
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    restart: always
+    depends_on:
+      - api
+    networks:
+      - wbat_internal
+      - proxy_network   # must match NPM's external network name
+
+volumes:
+  db_data:
+
+networks:
+  wbat_internal:
+    internal: true
+  proxy_network:
+    external: true
+    name: npm_default    # adjust to your NPM network name
