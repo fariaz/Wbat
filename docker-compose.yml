@@ -1,0 +1,74 @@
+version: "3.8"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WBAT Dev Stack  —  Deploy via Portainer Stacks
+#
+# Required environment variables (set in Portainer Stack > Env tab):
+#
+#   JWT_SECRET            Random secret, e.g. openssl rand -hex 32
+#   DB_ROOT_PASS          MariaDB root password
+#   DB_PASS               MariaDB wbat user password
+#   ATTACHMENTS_HOST_PATH Absolute path on Docker host, e.g. /opt/wbat/attachments
+#
+# After deploy, the app is available on port 8080 of the Docker host.
+# Point Nginx Proxy Manager at http://<docker-host-ip>:8080
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── MariaDB ──────────────────────────────────────────────────────────────
+  db:
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-rootpassword}
+      MYSQL_DATABASE: wbat
+      MYSQL_USER: wbat
+      MYSQL_PASSWORD: ${DB_PASS:-wbatpassword}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  # ── NestJS API ───────────────────────────────────────────────────────────
+  api:
+    build:
+      context: api
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: wbat
+      DB_PASS: ${DB_PASS:-wbatpassword}
+      DB_NAME: wbat
+      JWT_SECRET: ${JWT_SECRET:-change_me_in_production}
+      JWT_EXPIRES: 7d
+      ATTACHMENTS_PATH: /attachments
+      CORS_ORIGIN: "*"
+      PORT: 3000
+    volumes:
+      - ${ATTACHMENTS_HOST_PATH:-./attachments}:/attachments
+
+  # ── React Web (nginx) ────────────────────────────────────────────────────
+  web:
+    build:
+      context: web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+
+volumes:
+  db_data:
