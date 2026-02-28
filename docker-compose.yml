@@ -1,24 +1,12 @@
 version: "3.8"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# WBAT Dev Stack  —  Deploy via Portainer Stacks
-#
-# Required environment variables (set in Portainer Stack > Env tab):
-#
-#   JWT_SECRET            Random secret, e.g. openssl rand -hex 32
-#   DB_ROOT_PASS          MariaDB root password
-#   DB_PASS               MariaDB wbat user password
-#   ATTACHMENTS_HOST_PATH Absolute path on Docker host, e.g. /opt/wbat/attachments
-#
-# After deploy, the app is available on port 8080 of the Docker host.
-# Point Nginx Proxy Manager at http://<docker-host-ip>:8080
-# ─────────────────────────────────────────────────────────────────────────────
-
 services:
 
-  # ── MariaDB ──────────────────────────────────────────────────────────────
+  # ── MariaDB (init.sql baked into image) ──────────────────────────────────
   db:
-    image: mariadb:11
+    build:
+      context: db
+      dockerfile: Dockerfile
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-rootpassword}
@@ -27,7 +15,6 @@ services:
       MYSQL_PASSWORD: ${DB_PASS:-wbatpassword}
     volumes:
       - db_data:/var/lib/mysql
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -57,7 +44,7 @@ services:
       CORS_ORIGIN: "*"
       PORT: 3000
     volumes:
-      - ${ATTACHMENTS_HOST_PATH:-./attachments}:/attachments
+      - ${ATTACHMENTS_HOST_PATH:-/opt/wbat/attachments}:/attachments
 
   # ── React Web (nginx) ────────────────────────────────────────────────────
   web:
