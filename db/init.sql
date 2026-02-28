@@ -102,9 +102,9 @@ SELECT 1, 'My Company', 'VAT123456', '1 Main Street, City', 'admin@local', '+1 5
 WHERE NOT EXISTS (SELECT 1 FROM companies WHERE id = 1);
 
 -- Insert default admin user (password: admin  — bcrypt hash)
--- Hash for "admin": $2b$10$K.0HwpsoPDGaB/atFBmmXOGTw4ceeg33.WnGDtLuCqWKaMB/6p4Oi
+-- Hash for "admin": $2b$10$g19SQuD89IGWxfSR8A9eXOXGNBylLVV8UBmPxZaT4sB/cqp.NVPnq
 INSERT INTO users (id, company_id, email, password_hash, full_name, role)
-SELECT 1, 1, 'admin@local', '$2b$10$K.0HwpsoPDGaB/atFBmmXOGTw4ceeg33.WnGDtLuCqWKaMB/6p4Oi', 'Administrator', 'admin'
+SELECT 1, 1, 'admin@local', '$2b$10$g19SQuD89IGWxfSR8A9eXOXGNBylLVV8UBmPxZaT4sB/cqp.NVPnq', 'Administrator', 'admin'
 WHERE NOT EXISTS (SELECT 1 FROM users WHERE email = 'admin@local');
 
 -- Sample customer
